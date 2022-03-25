@@ -13,12 +13,15 @@ from datetime import datetime, timedelta
 import time
 from functools import lru_cache
 from tqdm import tqdm
+import xarray as xr
 
 # own imports
 from wavy.utils import hour_rounder, make_fc_dates
 from wavy.utils import finditem, parse_date, NoStdStreams
 from wavy.ncmod import check_if_ncfile_accessible
 from wavy.ncmod import ncdumpMeta, get_filevarname
+from wavy.ncmod import read_netcdfs_sel_lru
+from wavy.ncmod import process_one_path_field_lru,process_one_path_sel_lru
 from wavy.wconfig import load_or_default
 
 # ---------------------------------------------------------------------#
@@ -341,6 +344,37 @@ def generate_bestguess_leadtime(model, fc_date, lidx=None):
             leadtime = int(np.min(diffs[diffs >= 0]))
     return leadtime
 
+def get_model_xr( model=None,
+                  sdate=None,
+                  edate=None,
+                  date_incr=None,
+                  fc_date=None,
+                  leadtime=None,
+                  varalias=None):
+    if (sdate is not None
+        and edate is not None
+        and date_incr is not None):
+        fc_date = make_fc_dates(sdate, edate, date_incr)
+    filestr = make_model_filename_wrapper(model=model,
+                                          fc_date=fc_date,
+                                          leadtime=leadtime)
+    print(filestr)
+    print(fc_date)
+    meta = ncdumpMeta(filestr)
+    stdvarname = variable_info[varalias]['standard_name']
+    lonsname = get_filevarname('lons',variable_info,
+                               model_dict[model],meta)
+    latsname = get_filevarname('lats',variable_info,
+                               model_dict[model],meta)
+    # get other variables e.g. Hs [time,lat,lon]
+    filevarname = get_filevarname(varalias,variable_info,
+                                  model_dict[model],meta)
+    var = process_one_path_sel_lru(filestr,filevarname,fc_date)
+    lons = process_one_path_field_lru(filestr,lonsname)
+    lats = process_one_path_field_lru(filestr,latsname)
+    return var, lons, lats
+
+
 def get_model(model=None,
               sdate=None,
               edate=None,
@@ -364,6 +398,8 @@ def get_model(model=None,
     filestr = make_model_filename_wrapper(model=model,
                                           fc_date=fc_date,
                                           leadtime=leadtime)
+    print(filestr)
+    print(fc_date)
     if (isinstance(filestr, list) and st_obj is None):
         vardict, \
         filevarname = get_model_fc_mode(filestr=filestr[0],model=model,

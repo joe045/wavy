@@ -81,6 +81,14 @@ def process_one_path_zipped_lru(path,varname,tmpdir):
         return da
 
 @lru_cache(maxsize=32)
+def process_one_path_field_lru(path,varname):
+    return xr.open_dataset(path)[varname]
+
+@lru_cache(maxsize=32)
+def process_one_path_sel_lru(path,varname,dt):
+    return xr.open_dataset(path).sel(time=dt)[varname]
+
+@lru_cache(maxsize=32)
 def process_one_path_lru(path,t,varname):
     with xr.open_dataset(path) as ds:
         da = ds.sel(time=t)[varname]
